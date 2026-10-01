@@ -202,19 +202,23 @@ if submitted:
         sec_kws = [x.strip() for x in sec_kws_input.split(",") if x.strip()]
         app = SEOBriefApp(GEMINI_API_KEY, AHREFS_API_KEY, MODEL_ID)
 
-        status_box = st.status("Initializing analysis...", expanded=True)
+        # Container allows completely erasing the status indicator when finished/errored
+        status_holder = st.empty()
+        with status_holder.container():
+            status_box = st.status("Initializing analysis...", expanded=True)
 
         res, err = app.run_analysis(main_kw.strip(), sec_kws, country_code, status_box)
 
         if err == "NO_KEYWORD_DATA":
-            status_box.update(label="❌ Keyword not found in Ahrefs", state="error")
+            status_holder.empty()
             st.divider()
-            st.markdown("**No keyword was found for this data**")
+            st.markdown("**❌ No keyword was found for this data**")
             st.markdown(
                 "Our SEO tools have no data for the keyword you've introduced. "
                 "Check for typos, choose a different keyword or [reach out to the SEO team](https://pleo.enterprise.slack.com/archives/C0BMDNLMQJX) on Slack"
             )
         elif err:
+            status_holder.empty()
             st.error(f"❌ {err}")
         else:
             vols = res['volumes']
