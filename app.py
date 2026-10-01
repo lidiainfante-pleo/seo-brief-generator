@@ -13,7 +13,7 @@ try:
     GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
     AHREFS_API_KEY = st.secrets["AHREFS_API_KEY"]
 except Exception:
-    st.error("⚠️ API keys missing. Please configure GEMINI_API_KEY and AHREFS_API_KEY in your Streamlit Cloud Secrets settings.")
+    st.error("⚠️️ API keys missing. Please configure GEMINI_API_KEY and AHREFS_API_KEY in your Streamlit Cloud Secrets settings.")
     st.stop()
 
 MODEL_ID = "gemini-2.5-flash"
@@ -171,17 +171,18 @@ class SEOBriefApp:
         for pos in positions:
             raw_t = pos.get('type', [])
             if isinstance(raw_t, str):
-                types_list = [raw_t.lower()]
+                types_list = [raw_t.lower().strip()]
             elif isinstance(raw_t, list):
-                types_list = [str(x).lower() for x in raw_t]
+                types_list = [str(x).lower().strip() for x in raw_t]
             else:
                 types_list = []
 
-            if any("ai_overview" in x for x in types_list):
+            # 1. Exact SERP feature matching against Ahrefs API v3 schema
+            if "ai_overview" in types_list:
                 features["AI Overview"] = True
-            if any(any(img_k in x for img_k in ["image_pack", "image_th", "image"]) for x in types_list):
+            if "image_pack" in types_list or "image" in types_list or "images" in types_list:
                 features["Image pack"] = True
-            if any(any(vid_k in x for vid_k in ["video", "video_th"]) for x in types_list):
+            if "video" in types_list or "video_box" in types_list or "videos" in types_list:
                 features["Video"] = True
 
             title = pos.get('title')
@@ -275,6 +276,22 @@ if submitted:
             raw_vol = vols.get(main_kw.strip().lower(), "N/A")
             formatted_vol = f"{raw_vol:,}" if isinstance(raw_vol, int) else str(raw_vol)
 
+            # Build secondary keywords summary line
+            sec_kws_line = ""
+            if sec_kws:
+                sec_kw_parts = []
+                total_sec_vol = 0
+                for sk in sec_kws:
+                    s_vol = vols.get(sk.lower().strip(), 0)
+                    if isinstance(s_vol, int):
+                        total_sec_vol += s_vol
+                        sec_kw_parts.append(f"{sk} ({s_vol:,})")
+                    else:
+                        sec_kw_parts.append(f"{sk} (N/A)")
+                
+                sec_kws_formatted = ", ".join(sec_kw_parts)
+                sec_kws_line = f"**Secondary keywords:** {sec_kws_formatted} — {total_sec_vol:,} total monthly searches\n\n"
+
             # Build Rich Results section lines
             rich_results_lines = []
             for feat_name, is_present in res['features'].items():
@@ -294,8 +311,9 @@ if submitted:
             # FORMATTED BRIEF OUTPUT
             brief_output = (
                 f"**Main keyword:** {main_kw.strip()} — {formatted_vol} monthly searches ({selected_country})\n\n"
+                f"{sec_kws_line}"
                 f"**TL;DR: What should you create?**\n\n"
-                f"✍️ {res['creation_rec']}\n\n"
+                f"✍️️ {res['creation_rec']}\n\n"
                 f"**What is the user trying to accomplish?**\n\n"
                 f"➡️ The user is trying to {res['intent']}\n\n"
                 f"**What's currently winning on Google?** Use this information to inform how to satisfy the search intent of your reader.\n\n"
