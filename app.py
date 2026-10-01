@@ -212,7 +212,7 @@ if submitted:
         if err == "NO_KEYWORD_DATA":
             status_holder.empty()
             st.divider()
-            st.markdown("**❌ No keyword was found for this data**")
+            st.markdown("**❌ No data was found for this keyword**")
             st.markdown(
                 "Our SEO tools have no data for the keyword you've introduced. "
                 "Check for typos, choose a different keyword or [reach out to the SEO team](https://pleo.enterprise.slack.com/archives/C0BMDNLMQJX) on Slack"
