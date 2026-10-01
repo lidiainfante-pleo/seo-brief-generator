@@ -8,7 +8,7 @@ from google.genai import types
 # --- PAGE CONFIGURATION ---
 st.set_page_config(page_title="SEO Brief Generator for Pleo", page_icon="📝", layout="centered")
 
-# --- FETCH KEYS DIRECTLY FROM STREAMLIT SECRETS (NO UI INTERFACE) ---
+# --- FETCH KEYS DIRECTLY FROM STREAMLIT SECRETS ---
 try:
     GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
     AHREFS_API_KEY = st.secrets["AHREFS_API_KEY"]
@@ -41,16 +41,16 @@ COUNTRY_MAP = {
 # --- RICH RESULT GUIDANCE RULES ---
 RICH_RESULT_GUIDANCE = {
     "AI Overview": {
-        True: "Google triggers an AI summary for this search. To get included in the summary, include a section early in the article that mimics the answer that Google is giving and improves upon it.",
+        True: "Google triggers an AI summary for this search. Include a section early in the article that directly answers this prompt and improves upon existing snippets.",
         False: "This search doesn't trigger an AI summary from Google."
     },
     "Image pack": {
-        True: "Users might need some imagery to help them fulfill their intent. Consider asking for a custom graphic.",
-        False: "Users aren't looking for images in this search."
+        True: "Users need visual aid to fulfill intent. Plan for a custom graphic, diagram, or dataset visualization.",
+        False: "Users aren't looking for image features in this search."
     },
     "Video": {
-        True: "Users might find videos useful in this search.",
-        False: "Users aren't looking for videos in this search."
+        True: "Users find video content helpful for this topic. Consider embedding a video or short demo.",
+        False: "Users aren't looking for video features in this search."
     }
 }
 
@@ -202,41 +202,59 @@ if submitted:
             st.error(f"❌ {err}")
         else:
             vols = res['volumes']
-            main_vol = vols.get(main_kw.strip().lower(), "N/A")
+            raw_vol = vols.get(main_kw.strip().lower(), "N/A")
+            formatted_vol = f"{raw_vol:,}" if isinstance(raw_vol, int) else str(raw_vol)
 
-            # Build Rich Results section text
-            rich_results_lines = []
-            for feat_name, is_present in res['features'].items():
-                icon = '✅' if is_present else '❌'
-                guidance = RICH_RESULT_GUIDANCE.get(feat_name, {}).get(is_present, "")
-                rich_results_lines.append(f"- {feat_name}: {icon} - {guidance}")
-            rich_results_block = "\n".join(rich_results_lines)
+            st.divider()
 
-            # Build Questions sections text
-            paa_lines = "\n".join([f"- {q}" for q in res['paa'][:5]]) if res['paa'] else "- None detected"
-            fanout_lines = "\n".join([f"- {q}" for q in res['fanout']]) if res['fanout'] else "- None generated"
+            # --- RICH BRIEF DISPLAY CONTAINER ---
+            with st.container(border=True):
+                st.subheader("📋 Output SEO Brief")
+                
+                # Metric Cards Header
+                m_col1, m_col2, m_col3 = st.columns(3)
+                m_col1.metric("Main Keyword", main_kw.strip())
+                m_col2.metric("Monthly Volume", formatted_vol)
+                m_col3.metric("Target Market", selected_country)
 
-            # Formatted Output
-            formatted_brief = (
-                f"Main keyword: {main_kw.strip()} - {main_vol} monthly searches ({selected_country})\n\n"
-                f"What is the user trying to accomplish?\n"
-                f"The user is trying to {res['intent']}\n\n"
-                f"What's currently winning on Google? Use this information to inform how to satisfy the search intent of your reader.\n"
-                f"{res['reward']}\n\n"
-                f"Rich results on Google:\n"
-                f"{rich_results_block}\n\n"
-                f"Questions that the user might be trying to answer - use these to understand more about the users' pain points and emotional state. You can answer these in your content if they are relevant.\n"
-                f"{paa_lines}\n\n"
-                f"Deep dive questions. These are some of the potential follow-ups the user might ask an LLM. Use these to help your reader finish the journey:\n"
-                f"{fanout_lines}"
-            )
+                st.divider()
 
-            st.subheader("📋 Output SEO Brief")
-            st.code(formatted_brief, language="text")
+                # User Intent Section
+                st.markdown("#### 🎯 What is the user trying to accomplish?")
+                st.info(f"The user is trying to **{res['intent']}**")
 
-            st.download_button(
-                label="📥 Download Brief (.txt)",
-                data=formatted_brief,
-                file_name=f"seo_brief_{main_kw.strip().replace(' ', '_')}_{country_code}.txt",
-                mime="text/plain"
-            )
+                # Winning Content Formats
+                st.markdown("#### 🏆 What's currently winning on Google?")
+                st.caption("Use this information to inform how to satisfy the search intent of your reader:")
+                st.markdown(f"> {res['reward']}")
+
+                st.write("")
+
+                # Rich Results Section
+                st.markdown("#### ⚡ Rich Results on Google")
+                for feat_name, is_present in res['features'].items():
+                    icon = "✅" if is_present else "❌"
+                    guidance = RICH_RESULT_GUIDANCE.get(feat_name, {}).get(is_present, "")
+                    st.markdown(f"- **{feat_name}** {icon} — {guidance}")
+
+                st.divider()
+
+                # PAA Questions
+                st.markdown("#### ❓ Questions Users Are Trying to Answer")
+                st.caption("Use these to understand user pain points and emotional state. Answer these in your content if relevant:")
+                if res['paa']:
+                    for q in res['paa'][:5]:
+                        st.markdown(f"- {q}")
+                else:
+                    st.markdown("*None detected*")
+
+                st.write("")
+
+                # Fanout / LLM Questions
+                st.markdown("#### 🔮 Deep Dive Questions (LLM Fan-out)")
+                st.caption("Potential follow-up queries an LLM or generative engine would ask. Use these to help your reader finish the journey:")
+                if res['fanout']:
+                    for q in res['fanout']:
+                        st.markdown(f"- {q}")
+                else:
+                    st.markdown("*None generated*")
