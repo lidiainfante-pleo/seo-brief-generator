@@ -113,6 +113,26 @@ class SEOBriefApp:
             raw_intent = raw_intent[0].lower() + raw_intent[1:]
         return raw_intent
 
+    def get_creation_recommendation(self, keyword, intent, reward, paa, fanout):
+        paa_str = ", ".join(paa[:5]) if paa else "None"
+        fanout_str = ", ".join(fanout[:5]) if fanout else "None"
+        prompt = (
+            f"You are Pleo's senior SEO strategist writing a directive for a content writer.\n"
+            f"TARGET KEYWORD: \"{keyword}\"\n"
+            f"USER INTENT: {intent}\n"
+            f"SERP WINNERS: {reward}\n"
+            f"PAA QUESTIONS: {paa_str}\n"
+            f"DEEP DIVE QUESTIONS: {fanout_str}\n\n"
+            f"TASK: Write 1-2 punchy, actionable sentences recommending exact content to create. "
+            f"Specify the format (e.g., ultimate guide, comparison table, template, how-to), the core angle, and key subtopics to cover.\n\n"
+            f"RULES:\n"
+            f"- Start directly with the content type (e.g., \"A comprehensive guide featuring...\", \"An actionable breakdown that...\").\n"
+            f"- Do NOT include prefixes, headers, quotes, or bold labels.\n"
+            f"- Keep it under 40 words."
+        )
+        res = self._safe_ai(prompt)
+        return (res or "A comprehensive guide addressing the target keyword and related user questions.").strip()
+
     def get_bulk_volumes(self, keywords, country_code):
         headers = {"Authorization": f"Bearer {self.ahrefs_key}", "Accept": "application/json"}
         url = "https://api.ahrefs.com/v3/keywords-explorer/overview"
@@ -137,7 +157,6 @@ class SEOBriefApp:
 
         positions = data.get('positions', [])
         
-        # STOP if Ahrefs has no SERP positions for this keyword
         if not positions:
             return None, "NO_KEYWORD_DATA"
 
@@ -146,23 +165,41 @@ class SEOBriefApp:
         nav_noise = ["login", "sign up", "careers", "privacy policy", "homepage", "contact us"]
 
         for pos in positions:
-            t = pos.get('type', [])
-            title = pos.get('title')
+            raw_t = pos.get('type', [])
+            if isinstance(raw_t, str):
+                types_list = [raw_t.lower()]
+            elif isinstance(raw_t, list):
+                types_list = [str(x).lower() for x in raw_t]
+            else:
+                types_list = []
 
-            if title is None: continue
-            if any(n in title.lower() for n in nav_noise): continue
-            if "ai_overview_sitelink" in t: continue
+            if any("ai_overview" in x for x in types_list):
+                features["AI Overview"] = True
+            if any(any(img_k in x for img_k in ["image_pack", "image_th", "image"]) for x in types_list):
+                features["Image pack"] = True
+            if any(any(vid_k in x for vid_k in ["video", "video_th"]) for x in types_list):
+                features["Video"] = True
+
+            title = pos.get('title')
+            if not title:
+                continue
+
+            if any(n in title.lower() for n in nav_noise):
+                continue
+
+            if "ai_overview_sitelink" in types_list:
+                continue
+
+            if any("question" in x for x in types_list):
+                paa.append(title)
 
             if len(hints) < 12:
                 hints.append(f"Title: {title} | Type: {pos.get('page_type', 'organic')}")
 
-            if "question" in t: paa.append(title)
-            if "ai_overview" in t: features["AI Overview"] = True
-            if any(x in t for x in ["image_pack", "image_th"]): features["Image pack"] = True
-            if any(x in t for x in ["video", "video_th"]): features["Video"] = True
-            if pos.get('page_type') and "organic" in t: organic_types.append(pos.get('page_type'))
+            if pos.get('page_type') and any("organic" in x for x in types_list):
+                organic_types.append(pos.get('page_type'))
 
-        if not hints and not organic_types:
+        if not hints and not organic_types and not any(features.values()):
             return None, "NO_KEYWORD_DATA"
 
         status_container.update(label="📊 Pulling Data & AI Insights...", state="running")
@@ -174,8 +211,18 @@ class SEOBriefApp:
             vols = future_vols.result()
             fanout = future_fanout.result()
 
+        creation_rec = self.get_creation_recommendation(keyword, intent, reward, paa, fanout)
+
         status_container.update(label="✅ Analysis Complete.", state="complete")
-        return {"intent": intent, "reward": reward, "fanout": fanout, "paa": paa, "features": features, "volumes": vols}, None
+        return {
+            "intent": intent, 
+            "reward": reward, 
+            "fanout": fanout, 
+            "paa": paa, 
+            "features": features, 
+            "volumes": vols,
+            "creation_rec": creation_rec
+        }, None
 
 
 # --- USER INPUT FORM ---
@@ -202,7 +249,6 @@ if submitted:
         sec_kws = [x.strip() for x in sec_kws_input.split(",") if x.strip()]
         app = SEOBriefApp(GEMINI_API_KEY, AHREFS_API_KEY, MODEL_ID)
 
-        # Container allows completely erasing the status indicator when finished/errored
         status_holder = st.empty()
         with status_holder.container():
             status_box = st.status("Initializing analysis...", expanded=True)
@@ -241,9 +287,11 @@ if submitted:
 
             st.divider()
 
-            # FORMATTED BRIEF WITH ARROW BULLETS AND BREAKS
+            # FORMATTED BRIEF OUTPUT
             brief_output = (
                 f"**Main keyword:** {main_kw.strip()} — {formatted_vol} monthly searches ({selected_country})\n\n"
+                f"**What should you create?**\n\n"
+                f"➡️️ {res['creation_rec']}\n\n"
                 f"**What is the user trying to accomplish?**\n\n"
                 f"➡️ The user is trying to {res['intent']}\n\n"
                 f"**What's currently winning on Google?** Use this information to inform how to satisfy the search intent of your reader.\n\n"
