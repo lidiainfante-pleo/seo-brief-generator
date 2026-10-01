@@ -136,6 +136,11 @@ class SEOBriefApp:
             return None, f"Ahrefs Connection Failed: {str(e)}"
 
         positions = data.get('positions', [])
+        
+        # STOP if Ahrefs has no SERP positions for this keyword
+        if not positions:
+            return None, "NO_KEYWORD_DATA"
+
         hints, organic_types, paa = [], [], []
         features = {"AI Overview": False, "Image pack": False, "Video": False}
         nav_noise = ["login", "sign up", "careers", "privacy policy", "homepage", "contact us"]
@@ -156,6 +161,9 @@ class SEOBriefApp:
             if any(x in t for x in ["image_pack", "image_th"]): features["Image pack"] = True
             if any(x in t for x in ["video", "video_th"]): features["Video"] = True
             if pos.get('page_type') and "organic" in t: organic_types.append(pos.get('page_type'))
+
+        if not hints and not organic_types:
+            return None, "NO_KEYWORD_DATA"
 
         status_container.update(label="📊 Pulling Data & AI Insights...", state="running")
         with ThreadPoolExecutor(max_workers=3) as executor:
@@ -198,7 +206,15 @@ if submitted:
 
         res, err = app.run_analysis(main_kw.strip(), sec_kws, country_code, status_box)
 
-        if err:
+        if err == "NO_KEYWORD_DATA":
+            status_box.update(label="❌ Keyword not found in Ahrefs", state="error")
+            st.divider()
+            st.markdown("**No keyword was found for this data**")
+            st.markdown(
+                "Our SEO tools have no data for the keyword you've introduced. "
+                "Check for typos, choose a different keyword or [reach out to the SEO team](https://pleo.enterprise.slack.com/archives/C0BMDNLMQJX) on Slack"
+            )
+        elif err:
             st.error(f"❌ {err}")
         else:
             vols = res['volumes']
