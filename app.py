@@ -113,22 +113,26 @@ class SEOBriefApp:
             raw_intent = raw_intent[0].lower() + raw_intent[1:]
         return raw_intent
 
-    def get_creation_recommendation(self, keyword, intent, reward, paa, fanout):
+    def get_creation_recommendation(self, keyword, secondary_kws, intent, reward, paa, fanout):
         paa_str = ", ".join(paa[:5]) if paa else "None"
         fanout_str = ", ".join(fanout[:5]) if fanout else "None"
+        sec_kws_str = ", ".join(secondary_kws) if secondary_kws else "None"
+
         prompt = (
             f"You are Pleo's senior SEO strategist writing a directive for a content writer.\n"
             f"TARGET KEYWORD: \"{keyword}\"\n"
+            f"SECONDARY KEYWORDS: {sec_kws_str}\n"
             f"USER INTENT: {intent}\n"
             f"SERP WINNERS: {reward}\n"
             f"PAA QUESTIONS: {paa_str}\n"
             f"DEEP DIVE QUESTIONS: {fanout_str}\n\n"
             f"TASK: Write 1-2 punchy, actionable sentences recommending exact content to create. "
-            f"Specify the format (e.g., ultimate guide, comparison table, template, how-to), the core angle, and key subtopics to cover.\n\n"
+            f"Specify the format (e.g., ultimate guide, comparison table, template, how-to), the core angle, key subtopics to cover, "
+            f"and weave in the secondary keywords context naturally if provided.\n\n"
             f"RULES:\n"
             f"- Start directly with the content type (e.g., \"A comprehensive guide featuring...\", \"An actionable breakdown that...\").\n"
             f"- Do NOT include prefixes, headers, quotes, or bold labels.\n"
-            f"- Keep it under 40 words."
+            f"- Keep it under 45 words."
         )
         res = self._safe_ai(prompt)
         return (res or "A comprehensive guide addressing the target keyword and related user questions.").strip()
@@ -211,7 +215,7 @@ class SEOBriefApp:
             vols = future_vols.result()
             fanout = future_fanout.result()
 
-        creation_rec = self.get_creation_recommendation(keyword, intent, reward, paa, fanout)
+        creation_rec = self.get_creation_recommendation(keyword, secondary_kws, intent, reward, paa, fanout)
 
         status_container.update(label="✅ Analysis Complete.", state="complete")
         return {
@@ -290,8 +294,8 @@ if submitted:
             # FORMATTED BRIEF OUTPUT
             brief_output = (
                 f"**Main keyword:** {main_kw.strip()} — {formatted_vol} monthly searches ({selected_country})\n\n"
-                f"**What should you create?**\n\n"
-                f"➡️️ {res['creation_rec']}\n\n"
+                f"**TL;DR: What should you create?**\n\n"
+                f"✍️ {res['creation_rec']}\n\n"
                 f"**What is the user trying to accomplish?**\n\n"
                 f"➡️ The user is trying to {res['intent']}\n\n"
                 f"**What's currently winning on Google?** Use this information to inform how to satisfy the search intent of your reader.\n\n"
