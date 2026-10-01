@@ -13,7 +13,7 @@ try:
     GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
     AHREFS_API_KEY = st.secrets["AHREFS_API_KEY"]
 except Exception:
-    st.error("⚠️️ API keys missing. Please configure GEMINI_API_KEY and AHREFS_API_KEY in your Streamlit Cloud Secrets settings.")
+    st.error("⚠️ API keys missing. Please configure GEMINI_API_KEY and AHREFS_API_KEY in your Streamlit Cloud Secrets settings.")
     st.stop()
 
 MODEL_ID = "gemini-2.5-flash"
@@ -113,29 +113,51 @@ class SEOBriefApp:
             raw_intent = raw_intent[0].lower() + raw_intent[1:]
         return raw_intent
 
-    def get_creation_recommendation(self, keyword, secondary_kws, intent, reward, paa, fanout):
+    def get_creation_recommendation(self, keyword, secondary_kws, intent, reward, paa, fanout, planned_title="", planned_summary=""):
         paa_str = ", ".join(paa[:5]) if paa else "None"
         fanout_str = ", ".join(fanout[:5]) if fanout else "None"
         sec_kws_str = ", ".join(secondary_kws) if secondary_kws else "None"
 
-        prompt = (
-            f"You are Pleo's senior SEO strategist writing a directive for a content writer.\n"
-            f"TARGET KEYWORD: \"{keyword}\"\n"
-            f"SECONDARY KEYWORDS: {sec_kws_str}\n"
-            f"USER INTENT: {intent}\n"
-            f"SERP WINNERS: {reward}\n"
-            f"PAA QUESTIONS: {paa_str}\n"
-            f"DEEP DIVE QUESTIONS: {fanout_str}\n\n"
-            f"TASK: Write 1-2 punchy, actionable sentences recommending exact content to create. "
-            f"Specify the format (e.g., ultimate guide, comparison table, template, how-to), the core angle, key subtopics to cover, "
-            f"and weave in the secondary keywords context naturally if provided.\n\n"
-            f"RULES:\n"
-            f"- Start directly with the content type (e.g., \"A comprehensive guide featuring...\", \"An actionable breakdown that...\").\n"
-            f"- Do NOT include prefixes, headers, quotes, or bold labels.\n"
-            f"- Keep it under 45 words."
-        )
+        # EDITORIAL ALIGNMENT PROMPT (When planned context is provided)
+        if planned_title.strip() or planned_summary.strip():
+            prompt = (
+                f"You are Pleo's senior SEO strategist helping an editorial team optimize an existing planned content piece for search without altering its core goal or topic.\n"
+                f"PLANNED TITLE: \"{planned_title.strip()}\"\n"
+                f"PLANNED SUMMARY/GOAL: \"{planned_summary.strip()}\"\n"
+                f"TARGET KEYWORD: \"{keyword}\"\n"
+                f"SECONDARY KEYWORDS: {sec_kws_str}\n"
+                f"USER INTENT: {intent}\n"
+                f"SERP WINNERS: {reward}\n"
+                f"PAA QUESTIONS: {paa_str}\n"
+                f"DEEP DIVE QUESTIONS: {fanout_str}\n\n"
+                f"TASK: Write 1-2 punchy, actionable sentences advising the writer on how to align this specific planned article with search demand. "
+                f"Recommend how to frame the piece, sub-headings, or core takeaways to naturally weave in the search intent and secondary keywords while preserving its primary editorial narrative.\n\n"
+                f"RULES:\n"
+                f"- Respect the planned concept (do not tell them to write a generic guide if they are summarizing a report or thought leadership).\n"
+                f"- Focus on structural framing and sub-topic enrichment.\n"
+                f"- Do NOT include prefixes, headers, quotes, or bold labels.\n"
+                f"- Keep it under 50 words."
+            )
+        else:
+            # STANDARD CREATION PROMPT (Fallback when no context is provided)
+            prompt = (
+                f"You are Pleo's senior SEO strategist writing a directive for a content writer.\n"
+                f"TARGET KEYWORD: \"{keyword}\"\n"
+                f"SECONDARY KEYWORDS: {sec_kws_str}\n"
+                f"USER INTENT: {intent}\n"
+                f"SERP WINNERS: {reward}\n"
+                f"PAA QUESTIONS: {paa_str}\n"
+                f"DEEP DIVE QUESTIONS: {fanout_str}\n\n"
+                f"TASK: Write 1-2 punchy, actionable sentences recommending exact content to create. "
+                f"Specify the format, core angle, key subtopics to cover, and weave in secondary keywords naturally.\n\n"
+                f"RULES:\n"
+                f"- Start directly with the content type (e.g., \"A comprehensive guide featuring...\").\n"
+                f"- Do NOT include prefixes, headers, quotes, or bold labels.\n"
+                f"- Keep it under 45 words."
+            )
+
         res = self._safe_ai(prompt)
-        return (res or "A comprehensive guide addressing the target keyword and related user questions.").strip()
+        return (res or "A tailored content piece aligned with target keywords and user questions.").strip()
 
     def get_bulk_volumes(self, keywords, country_code):
         headers = {"Authorization": f"Bearer {self.ahrefs_key}", "Accept": "application/json"}
@@ -147,7 +169,7 @@ class SEOBriefApp:
         except Exception:
             return {}
 
-    def run_analysis(self, keyword, secondary_kws, country_code, status_container):
+    def run_analysis(self, keyword, secondary_kws, country_code, status_container, planned_title="", planned_summary=""):
         status_container.update(label=f"🔍 Scanning Google SERP ({country_code.upper()})...", state="running")
         headers = {"Authorization": f"Bearer {self.ahrefs_key}", "Accept": "application/json"}
         serp_url = "https://api.ahrefs.com/v3/serp-overview/serp-overview"
@@ -177,7 +199,6 @@ class SEOBriefApp:
             else:
                 types_list = []
 
-            # 1. Exact SERP feature matching against Ahrefs API v3 schema
             if "ai_overview" in types_list:
                 features["AI Overview"] = True
             if "image_pack" in types_list or "image" in types_list or "images" in types_list:
@@ -216,7 +237,9 @@ class SEOBriefApp:
             vols = future_vols.result()
             fanout = future_fanout.result()
 
-        creation_rec = self.get_creation_recommendation(keyword, secondary_kws, intent, reward, paa, fanout)
+        creation_rec = self.get_creation_recommendation(
+            keyword, secondary_kws, intent, reward, paa, fanout, planned_title, planned_summary
+        )
 
         status_container.update(label="✅ Analysis Complete.", state="complete")
         return {
@@ -243,6 +266,10 @@ with st.form("brief_form"):
     with st.expander("Optional: Add secondary keywords"):
         sec_kws_input = st.text_input("Secondary keywords (comma-separated)", placeholder="pricing, competitors")
 
+    with st.expander("Optional: Planned Article Context"):
+        planned_title_input = st.text_input("Working Article Title", placeholder="e.g. The reality of AI in finance: 5 hard truths")
+        planned_summary_input = st.text_area("Brief Outline / Editorial Goal", placeholder="e.g. Summary piece of AI report driving downloads")
+
     submitted = st.form_submit_button("Generate SEO Brief", type="primary")
 
 # --- EXECUTION & OUTPUT ---
@@ -258,7 +285,14 @@ if submitted:
         with status_holder.container():
             status_box = st.status("Initializing analysis...", expanded=True)
 
-        res, err = app.run_analysis(main_kw.strip(), sec_kws, country_code, status_box)
+        res, err = app.run_analysis(
+            main_kw.strip(), 
+            sec_kws, 
+            country_code, 
+            status_box, 
+            planned_title_input, 
+            planned_summary_input
+        )
 
         if err == "NO_KEYWORD_DATA":
             status_holder.empty()
@@ -313,7 +347,7 @@ if submitted:
                 f"**Main keyword:** {main_kw.strip()} — {formatted_vol} monthly searches ({selected_country})\n\n"
                 f"{sec_kws_line}"
                 f"**TL;DR: What should you create?**\n\n"
-                f"✍️️ {res['creation_rec']}\n\n"
+                f"✍️ {res['creation_rec']}\n\n"
                 f"**What is the user trying to accomplish?**\n\n"
                 f"➡️ The user is trying to {res['intent']}\n\n"
                 f"**What's currently winning on Google?** Use this information to inform how to satisfy the search intent of your reader.\n\n"
