@@ -8,6 +8,16 @@ from google.genai import types
 # --- PAGE CONFIGURATION ---
 st.set_page_config(page_title="SEO Brief Generator for Pleo", page_icon="📝", layout="centered")
 
+# --- FETCH KEYS DIRECTLY FROM STREAMLIT SECRETS (NO UI INTERFACE) ---
+try:
+    GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
+    AHREFS_API_KEY = st.secrets["AHREFS_API_KEY"]
+except Exception:
+    st.error("⚠️ API keys missing. Please configure GEMINI_API_KEY and AHREFS_API_KEY in your Streamlit Cloud Secrets settings.")
+    st.stop()
+
+MODEL_ID = "gemini-2.5-flash"
+
 # --- HEADER & ATTRIBUTION ---
 st.title("SEO Brief Generator for Pleo")
 st.markdown(
@@ -27,24 +37,6 @@ COUNTRY_MAP = {
     "Sweden": "se",
     "Netherlands": "nl"
 }
-
-# --- SECRETS & SIDEBAR CONFIGURATION ---
-# Safe loading for st.secrets (prevents crashing if secrets file is absent locally)
-try:
-    default_gemini = st.secrets.get("GEMINI_API_KEY", "")
-    default_ahrefs = st.secrets.get("AHREFS_API_KEY", "")
-except Exception:
-    default_gemini = ""
-    default_ahrefs = ""
-
-with st.sidebar:
-    st.header("⚙️ Settings")
-    
-    with st.expander("🔑 Advanced API Credentials", expanded=not (default_gemini and default_ahrefs)):
-        gemini_api_key = st.text_input("Gemini API Key", value=default_gemini, type="password")
-        ahrefs_api_key = st.text_input("Ahrefs API Key", value=default_ahrefs, type="password")
-    
-    model_id = st.text_input("Gemini Model ID", value="gemini-2.5-flash")
 
 # --- RICH RESULT GUIDANCE RULES ---
 RICH_RESULT_GUIDANCE = {
@@ -195,14 +187,12 @@ with st.form("brief_form"):
 
 # --- EXECUTION & OUTPUT ---
 if submitted:
-    if not gemini_api_key or not ahrefs_api_key:
-        st.error("Missing API Keys. Please configure secrets or enter credentials in the sidebar.")
-    elif not main_kw.strip():
+    if not main_kw.strip():
         st.error("Please insert a main keyword.")
     else:
         country_code = COUNTRY_MAP[selected_country]
         sec_kws = [x.strip() for x in sec_kws_input.split(",") if x.strip()]
-        app = SEOBriefApp(gemini_api_key, ahrefs_api_key, model_id)
+        app = SEOBriefApp(GEMINI_API_KEY, AHREFS_API_KEY, MODEL_ID)
 
         status_box = st.status("Initializing analysis...", expanded=True)
 
@@ -228,7 +218,7 @@ if submitted:
 
             # Formatted Output
             formatted_brief = (
-                f"Main keyword: {main_kw.strip()} - {main_vol} monthly searches\n\n"
+                f"Main keyword: {main_kw.strip()} - {main_vol} monthly searches ({selected_country})\n\n"
                 f"What is the user trying to accomplish?\n"
                 f"The user is trying to {res['intent']}\n\n"
                 f"What's currently winning on Google? Use this information to inform how to satisfy the search intent of your reader.\n"
