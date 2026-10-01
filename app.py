@@ -205,56 +205,35 @@ if submitted:
             raw_vol = vols.get(main_kw.strip().lower(), "N/A")
             formatted_vol = f"{raw_vol:,}" if isinstance(raw_vol, int) else str(raw_vol)
 
+            # Build Rich Results section lines
+            rich_results_lines = []
+            for feat_name, is_present in res['features'].items():
+                icon = "✅" if is_present else "❌"
+                guidance = RICH_RESULT_GUIDANCE.get(feat_name, {}).get(is_present, "")
+                rich_results_lines.append(f"- **{feat_name}** {icon} — {guidance}")
+            rich_results_block = "\n".join(rich_results_lines)
+
+            # Build PAA lines
+            paa_lines = "\n".join([f"- {q}" for q in res['paa'][:5]]) if res['paa'] else "- None detected"
+
+            # Build Fanout lines
+            fanout_lines = "\n".join([f"- {q}" for q in res['fanout']]) if res['fanout'] else "- None generated"
+
             st.divider()
 
-            # --- RICH BRIEF DISPLAY CONTAINER ---
-            with st.container(border=True):
-                st.subheader("📋 Output SEO Brief")
-                
-                # Metric Cards Header
-                m_col1, m_col2, m_col3 = st.columns(3)
-                m_col1.metric("Main Keyword", main_kw.strip())
-                m_col2.metric("Monthly Volume", formatted_vol)
-                m_col3.metric("Target Market", selected_country)
+            # SINGLE CONTINUOUS MARKDOWN BLOCK (No headers, no grid tables, no anchor links)
+            brief_output = (
+                f"**Main keyword:** {main_kw.strip()} — {formatted_vol} monthly searches ({selected_country})\n\n"
+                f"**What is the user trying to accomplish?**\n"
+                f"The user is trying to {res['intent']}\n\n"
+                f"**What's currently winning on Google?** Use this information to inform how to satisfy the search intent of your reader.\n"
+                f"{res['reward']}\n\n"
+                f"**Rich results on Google:**\n"
+                f"{rich_results_block}\n\n"
+                f"**Questions that the user might be trying to answer:** Use these to understand more about the users' pain points and emotional state. You can answer these in your content if they are relevant.\n"
+                f"{paa_lines}\n\n"
+                f"**Deep dive questions:** These are some of the potential follow-ups the user might ask an LLM. Use these to help your reader finish the journey:\n"
+                f"{fanout_lines}"
+            )
 
-                st.divider()
-
-                # User Intent Section
-                st.markdown("#### 🎯 What is the user trying to accomplish?")
-                st.info(f"The user is trying to **{res['intent']}**")
-
-                # Winning Content Formats
-                st.markdown("#### 🏆 What's currently winning on Google?")
-                st.caption("Use this information to inform how to satisfy the search intent of your reader:")
-                st.markdown(f"> {res['reward']}")
-
-                st.write("")
-
-                # Rich Results Section
-                st.markdown("#### ⚡ Rich Results on Google")
-                for feat_name, is_present in res['features'].items():
-                    icon = "✅" if is_present else "❌"
-                    guidance = RICH_RESULT_GUIDANCE.get(feat_name, {}).get(is_present, "")
-                    st.markdown(f"- **{feat_name}** {icon} — {guidance}")
-
-                st.divider()
-
-                # PAA Questions
-                st.markdown("#### ❓ Questions Users Are Trying to Answer")
-                st.caption("Use these to understand user pain points and emotional state. Answer these in your content if relevant:")
-                if res['paa']:
-                    for q in res['paa'][:5]:
-                        st.markdown(f"- {q}")
-                else:
-                    st.markdown("*None detected*")
-
-                st.write("")
-
-                # Fanout / LLM Questions
-                st.markdown("#### 🔮 Deep Dive Questions (LLM Fan-out)")
-                st.caption("Potential follow-up queries an LLM or generative engine would ask. Use these to help your reader finish the journey:")
-                if res['fanout']:
-                    for q in res['fanout']:
-                        st.markdown(f"- {q}")
-                else:
-                    st.markdown("*None generated*")
+            st.markdown(brief_output)
