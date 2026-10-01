@@ -221,13 +221,13 @@ if submitted:
 
             st.divider()
 
-            # SINGLE CONTINUOUS MARKDOWN BLOCK WITH PROPER PARAGRAPH BREAKS (\n\n)
+            # FORMATTED BRIEF WITH ARROW BULLETS AND BREAKS
             brief_output = (
                 f"**Main keyword:** {main_kw.strip()} — {formatted_vol} monthly searches ({selected_country})\n\n"
                 f"**What is the user trying to accomplish?**\n\n"
-                f"The user is trying to {res['intent']}\n\n"
+                f"➡️ The user is trying to {res['intent']}\n\n"
                 f"**What's currently winning on Google?** Use this information to inform how to satisfy the search intent of your reader.\n\n"
-                f"{res['reward']}\n\n"
+                f"➡️ {res['reward']}\n\n"
                 f"**Rich results on Google:**\n\n"
                 f"{rich_results_block}\n\n"
                 f"❓ **Questions that the user might be trying to answer:** Use these to understand more about the users' pain points and emotional state. You can answer these in your content if they are relevant.\n\n"
